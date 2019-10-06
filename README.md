@@ -32,3 +32,12 @@ A Blender plugin to visualize 3D city models encoded in [CityJSON](http://cityjs
 
 6. To see the properties of each object simply select the object and click on the context.object tab on the bottom right (Blender 2.80 interface). Then click the `Custom Properties` drop down menu. (See the screenshot `attributes.png` for more info.)
 
+## Development
+
+Clone this repository and have fun!
+
+If you are using Visual Studio Code, you may:
+
+- Install [Blender Development](jacqueslucke.blender-development
+): a plugin that allows starting and debugging Python scripts from VSC.
+- Install the [fake-bpy-module](https://github.com/nutti/fake-bpy-module) to enable auto-completion: `pip install fake-bpy-module-2.80`.
