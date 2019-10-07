@@ -15,7 +15,7 @@ import bpy
 import json
 
 
-def read_some_data(context, filepath, use_some_setting):
+def read_cityjson(context, filepath, cityjson_import_settings):
     print("Importing CityJSON file...")
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=True)
@@ -163,9 +163,9 @@ class ImportCityJSON(Operator, ImportHelper):
     #)
 
     def execute(self, context):
-        return read_some_data(context, self.filepath, self.use_setting)
+        return read_cityjson(context, self.filepath, self.use_setting)
 
-def export_some_data(context, filepath, use_some_settings):
+def export_cityjson(context, filepath, cityjson_export_settings):
     pass
 
 class ExportCityJSON(Operator, ExportHelper):
