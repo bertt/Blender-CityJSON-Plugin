@@ -114,9 +114,7 @@ def read_cityjson(context, filepath, cityjson_import_settings):
                 scene = bpy.context.scene
                 scene.collection.objects.link(obj)
                 #Assigning attributes to orphan objects
-                if 'attributes' in data['CityObjects'][theid]:
-                    for attribute in data['CityObjects'][theid]['attributes']:
-                            obj[attribute]=data['CityObjects'][theid]['attributes'][attribute]
+                obj = assign_properties(obj, data["CityObjects"][theid])
         print("CityJSON file successfully imported.")
     return {'FINISHED'}
 
