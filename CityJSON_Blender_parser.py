@@ -70,9 +70,7 @@ def read_cityjson(context, filepath, cityjson_import_settings):
                     scene.collection.objects.link(obj)
                     #bpy.data.objects[child].select_set(True)
                     #Assigning attributes to chilren objects
-                    if 'attributes' in data['CityObjects'][child]: 
-                        for attribute in data['CityObjects'][child]['attributes']:
-                            obj[attribute]=data['CityObjects'][child]['attributes'][attribute]        
+                    obj = assign_properties(obj, data["CityObjects"][child])
                 #Creating empty meshes of the parents to join all the children    
                 mesh_data = bpy.data.meshes.new("empty")
                 obj = bpy.data.objects.new(parents_name, mesh_data)
@@ -80,9 +78,7 @@ def read_cityjson(context, filepath, cityjson_import_settings):
                 scene.collection.objects.link(obj)
                 #bpy.data.objects[parents_name].select_set(True)
                 #Assigning attributes to parent objects
-                if 'attributes' in data['CityObjects'][theid]:
-                    for attribute in data['CityObjects'][theid]['attributes']:
-                            obj[attribute]=data['CityObjects'][theid]['attributes'][attribute]
+                obj = assign_properties(obj, data["CityObjects"][theid])
                 #Creating parent-child relationship
                 objects = bpy.data.objects
                 parent_obj = objects[parents_name]
@@ -123,6 +119,20 @@ def read_cityjson(context, filepath, cityjson_import_settings):
                             obj[attribute]=data['CityObjects'][theid]['attributes'][attribute]
         print("CityJSON file successfully imported.")
     return {'FINISHED'}
+
+def assign_properties(obj, props, prefix=[]):
+    """Assigns the custom properties to obj based on the props"""
+    for prop, value in props.items():
+        if prop in ["geometry", "children", "parents"]:
+            continue
+
+        if isinstance(value, dict):
+            obj = assign_properties(obj, value, prefix + [prop])
+        else:
+            obj[".".join(prefix + [prop])] = value
+
+    return obj
+
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ImportHelper, ExportHelper
