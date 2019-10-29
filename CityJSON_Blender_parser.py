@@ -26,13 +26,11 @@ def clean_list(values):
 def assign_properties(obj, props, prefix=[]):
     #Assigns the custom properties to obj based on the props
     for prop, value in props.items():
-        
         if prop in ["geometry", "children", "parents"]:
             continue
 
         if isinstance(value, dict):
             obj = assign_properties(obj, value, prefix + [prop])
-        
         else:
             obj[".".join(prefix + [prop])] = value
 
@@ -63,112 +61,162 @@ def original_coordinates(vertices,minx,miny,minz):
     
     return (tuple(zip(original_x,original_y,original_z)))
 
+def clean_buffer(vertices, bounds):
+    """Cleans the vertices index from unused vertices"""
 
+    new_bounds = list()
+    new_vertices = list()
 
-def objects_renderer(pointer, data, vertices):
-    #Parsing the boundary data of every object
-    for theid in data['CityObjects']:
-        bound=list()                
+    i = 0
+    for bound in bounds:
+        new_bound = list()
+        for j in range(len(bound)):
+            new_vertices.append(vertices[bound[j]])
+            new_bound.append(i)
+            i = i + 1
         
-        if len(data['CityObjects'][theid]['geometry']):
-            geom = data['CityObjects'][theid]['geometry'][pointer]
+        new_bounds.append(tuple(new_bound))
+    
+    return new_vertices, new_bounds
+
+def get_scene_name(lod):
+    """Returns the scene name for a given lod"""
+
+    return "LoD {lod}".format(lod=lod)
+
+def get_scene(lod):
+    """Returns the scene that corresponds to the given lod"""
+
+    name = get_scene_name(lod)
+
+    if name in bpy.data.scenes:
+        return bpy.data.scenes[name]
+    else:
+        bpy.ops.scene.new(type='NEW')
+        bpy.context.scene.name = name
+
+def check_material(material, surface):
+    """Checks if the material can represent the provided surface"""
+
+    if not material.name.startswith(surface['type']):
+        return False
+    
+    # TODO: Add logic here to check for semantic surface attributes
+
+    return True
+
+def get_material(surface):
+    """Returns the material that corresponds to the semantic surface"""
+    matches = [m for m in bpy.data.materials if check_material(m, surface)]
+
+    if len(matches) > 0:
+        return matches[0]
+    
+    mat = bpy.data.materials.new(name=surface['type'])
+
+    assign_properties(mat, surface)
+
+    #Assign color based on surface type    
+    if surface['type'] =='WallSurface':
+        mat.diffuse_color = (0.8,0.8,0.8,1)                            
+    elif surface['type'] =='RoofSurface':
+        mat.diffuse_color = (0.9,0.057,0.086,1)                                       
+    elif surface['type'] =='GroundSurface':
+        mat.diffuse_color = (0.507,0.233,0.036,1)                            
+    else:
+        mat.diffuse_color = (0,0,0,1)
+
+    return mat
+
+def create_empty_object(name):
+    """Returns an empty blender object"""
+
+    new_object = bpy.data.objects.new(name, None)
+
+    return new_object
+
+def create_mesh_object(name, vertices, faces):
+    """Returns a mesh blendre object"""
+
+    mesh_data = bpy.data.meshes.new(name)
+    if len(faces):
+        mesh_data.from_pydata(vertices, [], faces)
+    new_object = bpy.data.objects.new(name, mesh_data)
+
+    return new_object
+
+def objects_renderer(data, vertices):
+    new_objects = []
+
+    #Parsing the boundary data of every object
+    for objid, cityobject in data['CityObjects'].items():
+        city_obj = create_empty_object(objid)
+        new_objects.append(city_obj)
+
+        bound=list()
+        for i in range(len(cityobject['geometry'])):
+            geom = cityobject['geometry'][i]
             
             #Checking how nested the geometry is i.e what kind of 3D geometry it contains
             if((geom['type']=='MultiSurface') or (geom['type'] == 'CompositeSurface')):
-            
                 for face in geom['boundaries']:
                     # This if - else statement ignores all the holes if any in any geometry
-                    if len(face)>1:
-                        face = face[0]
-                        bound.append(tuple(face))
-                    else:
-                        for verts in face:
-                            bound.append(tuple(verts))
+                    if len(face)>0:
+                        bound.append(tuple(face[0]))
                 
             elif (geom['type']=='Solid'):
                 for shell in geom['boundaries']:
                     for face in shell:
-                        if (len(face)>1):
-                            face = face[0]
-                            bound.append(tuple(face))
-                        else:
-                            for verts in face:
-                                bound.append(tuple(verts))
+                        if (len(face)>0):
+                            bound.append(tuple(face[0]))
                                                             
             elif (geom['type']=='MultiSolid'):
                 for solid in geom['boundaries']:
                     for shell in solid:
                         for face in shell:
-                            if (len(face)>1):
-                                face = face[0]
-                                bound.append(tuple(face))
-                            else:
-                                for verts in face:
-                                    bound.append(tuple(verts))
+                            if (len(face)>0):
+                                bound.append(tuple(face[0]))
         
-        #Visualization part
-        mesh_data = bpy.data.meshes.new("mesh")
-        if len(bound):
-            mesh_data.from_pydata(vertices, [], bound)
-        mesh_data.update()
-        obj = bpy.data.objects.new(theid, mesh_data)
-        scene = bpy.context.scene
-        scene.collection.objects.link(obj)
-        
-        #Assigning attributes to chilren objects
-        obj = assign_properties(obj, data["CityObjects"][theid])
+            temp_vertices, temp_bound = clean_buffer(vertices, bound)
+            
+            obj_name = "{index}: [LoD{lod}] {name}".format(name=objid, lod=geom['lod'], index=i)
+            obj = create_mesh_object(obj_name, temp_vertices, temp_bound)
+            obj.parent = city_obj
+            new_objects.append(obj)
+            
+            #Assigning attributes to chilren objects
+            obj = assign_properties(obj, cityobject)
 
-        #Assigning semantics
-        obj = bpy.data.objects[theid].data
-   
-        if len(data['CityObjects'][theid]['geometry']):
-            geom = data['CityObjects'][theid]['geometry'][pointer]
+            #Assigning semantic surfaces
+            obj_data = obj.data
             
             if 'semantics' in geom:
                 values = geom['semantics']['values']
                 
                 for surface in geom['semantics']['surfaces']:
-                    mat = bpy.data.materials.new(name="Test_Material")
-                    assign_properties(mat, surface)                   
-                    #Assigning materials on each object
-                    obj.materials.append(mat)
-                    #Assign color based on surface type
-                    
-                    if surface['type'] =='WallSurface':
-                        mat.diffuse_color = (0.8,0.8,0.8,1)                            
-                    
-                    elif surface['type'] =='RoofSurface':
-                        mat.diffuse_color = (0.9,0.057,0.086,1)                                       
-                    
-                    elif surface['type'] =='GroundSurface':
-                        mat.diffuse_color = (0.507,0.233,0.036,1)                            
-                    
-                    else:
-                        mat.diffuse_color = (0,0,0,1)
+                    mat = get_material(surface)
+
+                    obj_data.materials.append(mat)
                         
-                obj.update()                       
+                obj_data.update()                       
                 values = clean_list(values)
-                i=0
                 
-                for face in obj.polygons:
-                    face.material_index = values[i]
-                    i+=1
-     
+                j=0
+                for face in obj_data.polygons:
+                    face.material_index = values[j]
+                    j+=1
+    
     #Creating parent-child relationship 
     objects = bpy.data.objects  
-    for theid in data['CityObjects']:
-        
-        if 'children' in data['CityObjects'][theid]:
-            # Storing parent's ID
-            parent_obj = objects[theid]
-            
-            for child in data['CityObjects'][theid]['children']:
-                #Assigning parent to child
-                objects[child].parent = parent_obj
-                
-        elif 'parents' in data['CityObjects'][theid]: 
+    for objid, cityobject in data['CityObjects'].items():
+        if 'parents' in cityobject and len(cityobject['parents']) > 0: 
             #Assigning child to parent
-            objects[theid].parent = objects[data['CityObjects'][theid]['parents'][0]]
+            objects[objid].parent = objects[cityobject['parents'][0]]
+
+    scene = bpy.context.scene
+    for obj in new_objects:
+        scene.collection.objects.link(obj)
+
     return 0
     
 
@@ -205,11 +253,7 @@ def cityjson_parser(context, filepath, cityjson_import_settings):
         while (len(data['CityObjects'][theid]['geometry']) == 0):
             theid = theid = random.choice(list(data['CityObjects']))
             
-        #Create new scenes and render every geometry in each
-        for i in range(len(data['CityObjects'][theid]['geometry'])):
-            bpy.ops.scene.new(type='NEW')
-            bpy.context.scene.name ="Geometry "+ str(i)         
-            objects_renderer(i, data, vertices)
+        objects_renderer(data, vertices)
         
         print("CityJSON file successfully imported.")
         
@@ -236,16 +280,6 @@ class ImportCityJSON(Operator, ImportHelper):
         description="Example Tooltip",
         default=True,
     )
-
-    #type: EnumProperty(
-    #    name="Example Enum",
-    #    description="Choose between two items",
-    #    items=(
-    #        ('OPT_A', "First Option", "Description one"),
-    #        ('OPT_B', "Second Option", "Description two"),
-    #    ),
-    #    default='OPT_A',
-    #)
 
     def execute(self, context):
         return cityjson_parser(context, self.filepath, self.use_setting)
@@ -287,16 +321,6 @@ class ExportCityJSON(Operator, ExportHelper):
         description="Example Tooltip",
         default=True,
     )
-
-    #type: EnumProperty(
-    #    name="Example Enum",
-    #    description="Choose between two items",
-    #    items=(
-    #        ('OPT_A', "First Option", "Description one"),
-    #        ('OPT_B', "Second Option", "Description two"),
-    #    ),
-    #    default='OPT_A',
-    #)
 
     def execute(self, context):
         return write_cityjson(context, self.filepath, self.use_setting)
