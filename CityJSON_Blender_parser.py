@@ -17,6 +17,12 @@ from bpy_extras.io_utils import ImportHelper, ExportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy.types import Operator
 
+material_colors = {
+    "WallSurface": (0.8,0.8,0.8,1),
+    "RoofSurface": (0.9,0.057,0.086,1),
+    "GroundSurface": (0.507,0.233,0.036,1)
+}
+
 def clean_list(values):
     
     while isinstance(values[0],list):
@@ -117,12 +123,8 @@ def get_material(surface):
     assign_properties(mat, surface)
 
     #Assign color based on surface type    
-    if surface['type'] =='WallSurface':
-        mat.diffuse_color = (0.8,0.8,0.8,1)                            
-    elif surface['type'] =='RoofSurface':
-        mat.diffuse_color = (0.9,0.057,0.086,1)                                       
-    elif surface['type'] =='GroundSurface':
-        mat.diffuse_color = (0.507,0.233,0.036,1)                            
+    if surface['type'] in material_colors:
+        mat.diffuse_color = material_colors[surface["type"]]                            
     else:
         mat.diffuse_color = (0,0,0,1)
 
