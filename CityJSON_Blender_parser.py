@@ -178,6 +178,9 @@ def objects_renderer(data, vertices):
                         for face in shell:
                             if (len(face)>0):
                                 bound.append(tuple(face[0]))
+            else:
+                # TODO: There should be a warning if this is not handled!
+                continue
         
             temp_vertices, temp_bound = clean_buffer(vertices, bound)
             
