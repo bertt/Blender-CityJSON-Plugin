@@ -13,6 +13,7 @@ bl_info = {
 import bpy
 import json
 import random
+import time
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy.types import Operator
@@ -150,6 +151,8 @@ def create_mesh_object(name, vertices, faces):
 def objects_renderer(data, vertices):
     new_objects = []
 
+    time_start = time.time()
+
     #Parsing the boundary data of every object
     for objid, cityobject in data['CityObjects'].items():
         city_obj = create_empty_object(objid)
@@ -211,16 +214,24 @@ def objects_renderer(data, vertices):
                     face.material_index = values[j]
                     j+=1
     
+    print("Importing objects took {time}...".format(time=(time.time() - time_start)))
+    time_start = time.time()
+    
     #Creating parent-child relationship 
     objects = bpy.data.objects  
     for objid, cityobject in data['CityObjects'].items():
         if 'parents' in cityobject and len(cityobject['parents']) > 0: 
             #Assigning child to parent
             objects[objid].parent = objects[cityobject['parents'][0]]
-
+    
+    print("Parent-child association took {time}...".format(time=(time.time() - time_start)))
+    time_start = time.time()
+    
     scene = bpy.context.scene
     for obj in new_objects:
         scene.collection.objects.link(obj)
+    
+    print("Linking with the scene took {time}...".format(time=(time.time() - time_start)))
 
     return 0
     
