@@ -138,28 +138,62 @@ def create_empty_object(name):
 
     return new_object
 
-def create_mesh_object(name, vertices, faces):
+def create_mesh_object(name, vertices, faces, materials=[], material_indices=[]):
     """Returns a mesh blendre object"""
 
-    mesh_data = bpy.data.meshes.new(name)
+    mesh_data = None
+
     if len(faces):
-        mesh_data.from_pydata(vertices, [], faces)
+        mesh_data = bpy.data.meshes.new(name)
+
+        for material in materials:
+            mesh_data.materials.append(material)
+
+        indices = [i for face in faces for i in face]
+        
+        mesh_data.vertices.add(len(vertices))
+        mesh_data.loops.add(len(indices))
+        mesh_data.polygons.add(len(faces))
+
+        coords = [c for v in vertices for c in v]
+
+        loop_totals = [len(face) for face in faces]
+        loop_starts = []
+        i = 0
+        for face in faces:
+            loop_starts.append(i)
+            i += len(face)
+
+        mesh_data.vertices.foreach_set("co", coords)
+        mesh_data.loops.foreach_set("vertex_index", indices)
+        mesh_data.polygons.foreach_set("loop_start", loop_starts)
+        mesh_data.polygons.foreach_set("loop_total", loop_totals)
+        if len(material_indices) == len(faces):
+            mesh_data.polygons.foreach_set("material_index", material_indices)
+        elif len(material_indices) > len(faces):
+            print("Object {name} has {num_faces} faces but {num_surfaces} semantic surfaces!".format(name=name, num_faces=len(faces), num_surfaces=len(material_indices)))
+
+        mesh_data.update()
+        
     new_object = bpy.data.objects.new(name, mesh_data)
 
     return new_object
 
 def objects_renderer(data, vertices):
     new_objects = []
+    cityobjs = {}
 
     time_start = time.time()
 
     #Parsing the boundary data of every object
     for objid, cityobject in data['CityObjects'].items():
         city_obj = create_empty_object(objid)
+        city_obj = assign_properties(city_obj, cityobject)
         new_objects.append(city_obj)
+        cityobjs[objid] = city_obj
 
-        bound=list()
         for i in range(len(cityobject['geometry'])):
+            bound=list()
             geom = cityobject['geometry'][i]
             
             #Checking how nested the geometry is i.e what kind of 3D geometry it contains
@@ -187,49 +221,37 @@ def objects_renderer(data, vertices):
         
             temp_vertices, temp_bound = clean_buffer(vertices, bound)
             
-            obj_name = "{index}: [LoD{lod}] {name}".format(name=objid, lod=geom['lod'], index=i)
-            obj = create_mesh_object(obj_name, temp_vertices, temp_bound)
-            obj.parent = city_obj
-            new_objects.append(obj)
-            
-            #Assigning attributes to chilren objects
-            obj = assign_properties(obj, cityobject)
-
-            #Assigning semantic surfaces
-            obj_data = obj.data
-            
+            mats = []
+            values = []
             if 'semantics' in geom:
                 values = geom['semantics']['values']
                 
                 for surface in geom['semantics']['surfaces']:
-                    mat = get_material(surface)
-
-                    obj_data.materials.append(mat)
+                    mats.append(get_material(surface))
                         
-                obj_data.update()                       
                 values = clean_list(values)
-                
-                j=0
-                for face in obj_data.polygons:
-                    face.material_index = values[j]
-                    j+=1
+
+            obj_name = "{index}: [LoD{lod}] {name}".format(name=objid, lod=geom['lod'], index=i)
+            obj = create_mesh_object(obj_name, temp_vertices, temp_bound, mats, values)
+                        
+            obj.parent = city_obj
+            new_objects.append(obj)
     
     print("Importing objects took {time}...".format(time=(time.time() - time_start)))
     time_start = time.time()
     
     #Creating parent-child relationship 
-    objects = bpy.data.objects  
     for objid, cityobject in data['CityObjects'].items():
         if 'parents' in cityobject and len(cityobject['parents']) > 0: 
             #Assigning child to parent
-            objects[objid].parent = objects[cityobject['parents'][0]]
+            cityobjs[objid].parent = cityobjs[cityobject['parents'][0]]
     
     print("Parent-child association took {time}...".format(time=(time.time() - time_start)))
     time_start = time.time()
     
-    scene = bpy.context.scene
+    collection = bpy.context.scene.collection
     for obj in new_objects:
-        scene.collection.objects.link(obj)
+        collection.objects.link(obj)
     
     print("Linking with the scene took {time}...".format(time=(time.time() - time_start)))
 
@@ -263,11 +285,6 @@ def cityjson_parser(context, filepath, cityjson_import_settings):
         translation = coord_translate_axis_origin(vertices)
         #Updating vertices with new translated vertices
         vertices = translation[0]
-        
-        #Pick a random building ID to find the number of geometries
-        theid = random.choice(list(data['CityObjects']))
-        while (len(data['CityObjects'][theid]['geometry']) == 0):
-            theid = theid = random.choice(list(data['CityObjects']))
             
         objects_renderer(data, vertices)
         
