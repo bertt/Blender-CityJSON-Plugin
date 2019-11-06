@@ -185,12 +185,17 @@ def objects_renderer(data, vertices):
 
     time_start = time.time()
 
+    progress = 0
+    progress_max = len(data['CityObjects'])
     #Parsing the boundary data of every object
     for objid, cityobject in data['CityObjects'].items():
         city_obj = create_empty_object(objid)
         city_obj = assign_properties(city_obj, cityobject)
         new_objects.append(city_obj)
         cityobjs[objid] = city_obj
+
+        print ("Rendering: " + str(round(progress*100/progress_max, 1))+"% completed", end="\r")
+        progress = progress + 1
 
         for i in range(len(cityobject['geometry'])):
             bound=list()
